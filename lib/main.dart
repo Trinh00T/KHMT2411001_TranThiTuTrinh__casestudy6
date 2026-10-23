@@ -185,6 +185,8 @@ class ExpenseHomeScreen extends StatefulWidget {
 
 class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   int selectedTab = 0;
+String _transactionSearch = '';
+String _transactionFilter = 'Tất cả';
   @override
   void initState() {
     super.initState();
@@ -375,6 +377,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
           buildStatisticsTab(),
           buildTransactionsTab(),
           buildProfileTab(),
+
         ],
       ),
 
@@ -1036,38 +1039,281 @@ color: color,
 );
 }
 
+
+
+
 Widget buildTransactionsTab() {
+final keyword = _transactionSearch.trim().toLowerCase();
+
+final filteredTransactions = transactions.where((item) {
+final title = (item['title'] ?? '').toString().toLowerCase();
+final category =
+(item['category'] ?? '').toString().toLowerCase();
+final note = (item['note'] ?? '').toString().toLowerCase();
+
+final matchesSearch = keyword.isEmpty ||
+title.contains(keyword) ||
+category.contains(keyword) ||
+note.contains(keyword);
+
+final amount = (item['amount'] as num?)?.toDouble() ?? 0;
+final matchesType = _transactionFilter == 'Tất cả' ||
+(_transactionFilter == 'Thu nhập' && amount > 0) ||
+(_transactionFilter == 'Chi tiêu' && amount < 0);
+
+return matchesSearch && matchesType;
+}).toList()
+..sort((a, b) =>
+b['date'].toString().compareTo(a['date'].toString()));
+
 return ListView(
-padding: const EdgeInsets.all(20),
+padding: const EdgeInsets.fromLTRB(20, 16, 20, 90),
 children: [
 const Text(
-'Tất cả giao dịch',
+'Giao dịch',
 style: TextStyle(
-fontSize: 22,
+fontSize: 23,
 fontWeight: FontWeight.bold,
 color: darkColor,
 ),
 ),
+const SizedBox(height: 18),
+
+// Ô tìm kiếm
+TextField(
+onChanged: (value) {
+setState(() => _transactionSearch = value);
+},
+decoration: InputDecoration(
+hintText: 'Tìm kiếm giao dịch...',
+prefixIcon: const Icon(Icons.search),
+suffixIcon: _transactionSearch.isNotEmpty
+? IconButton(
+icon: const Icon(Icons.close),
+onPressed: () {
+setState(() => _transactionSearch = '');
+},
+)
+: IconButton(
+icon: const Icon(Icons.filter_list),
+onPressed: () {
+showModalBottomSheet(
+context: context,
+builder: (sheetContext) {
+return SafeArea(
+child: Padding(
+padding: const EdgeInsets.all(20),
+child: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment:
+CrossAxisAlignment.start,
+children: [
+const Text(
+'Lọc giao dịch',
+style: TextStyle(
+fontSize: 18,
+fontWeight: FontWeight.bold,
+),
+),
+const SizedBox(height: 12),
+...['Tất cả', 'Thu nhập', 'Chi tiêu']
+.map((filter) {
+return RadioListTile<String>(
+title: Text(filter),
+value: filter,
+groupValue: _transactionFilter,
+onChanged: (value) {
+if (value != null) {
+setState(() {
+_transactionFilter = value;
+});
+Navigator.pop(sheetContext);
+}
+},
+);
+}),
+],
+),
+),
+);
+},
+);
+},
+),
+filled: true,
+fillColor: const Color(0xFFF0F2FA),
+contentPadding: const EdgeInsets.symmetric(vertical: 12),
+border: OutlineInputBorder(
+borderRadius: BorderRadius.circular(14),
+borderSide: BorderSide.none,
+),
+),
+),
+const SizedBox(height: 14),
+
+// Bộ lọc nhanh
+Row(
+children: ['Tất cả', 'Thu nhập', 'Chi tiêu'].map((filter) {
+final selected = _transactionFilter == filter;
+
+return Expanded(
+child: Padding(
+padding: const EdgeInsets.only(right: 7),
+child: OutlinedButton(
+onPressed: () {
+setState(() => _transactionFilter = filter);
+},
+style: OutlinedButton.styleFrom(
+backgroundColor:
+selected ? primaryColor : Colors.white,
+foregroundColor:
+selected ? Colors.white : darkColor,
+side: BorderSide(
+color: selected
+? primaryColor
+: const Color(0xFFE2E5EF),
+),
+padding: const EdgeInsets.symmetric(vertical: 10),
+shape: RoundedRectangleBorder(
+borderRadius: BorderRadius.circular(10),
+),
+),
+child: Text(
+filter,
+maxLines: 1,
+style: const TextStyle(fontSize: 12),
+),
+),
+),
+);
+}).toList(),
+),
 const SizedBox(height: 20),
-if (transactions.isEmpty)
-const Center(child: Text('Chưa có giao dịch nào.')),
-...transactions.map(buildTransactionCard),
-const SizedBox(height: 70),
+
+if (filteredTransactions.isEmpty)
+Padding(
+padding: const EdgeInsets.symmetric(vertical: 45),
+child: Column(
+children: [
+const Icon(
+Icons.receipt_long_outlined,
+size: 48,
+color: Colors.grey,
+),
+const SizedBox(height: 12),
+Text(
+transactions.isEmpty
+? 'Chưa có giao dịch nào.'
+: 'Không tìm thấy giao dịch phù hợp.',
+textAlign: TextAlign.center,
+style: const TextStyle(color: Colors.grey),
+),
+],
+),
+)
+else ...[
+Text(
+'${filteredTransactions.length} giao dịch',
+style: const TextStyle(
+fontSize: 13,
+color: Colors.grey,
+),
+),
+const SizedBox(height: 8),
+...filteredTransactions.map((item) {
+final amount = (item['amount'] as num).toInt();
+final isIncome = amount > 0;
+final category = (item['category'] ?? 'Khác').toString();
+final date = (item['date'] ?? '').toString();
+final displayDate = date.length >= 10
+? '${date.substring(8, 10)}/'
+'${date.substring(5, 7)}/'
+'${date.substring(0, 4)}'
+: date;
+
+return Card(
+elevation: 0,
+color: Colors.white,
+margin: const EdgeInsets.only(bottom: 10),
+shape: RoundedRectangleBorder(
+borderRadius: BorderRadius.circular(14),
+),
+child: ListTile(
+contentPadding: const EdgeInsets.symmetric(
+horizontal: 12,
+vertical: 5,
+),
+leading: CircleAvatar(
+backgroundColor: getCategoryColor(category)
+.withValues(alpha: 0.15),
+child: Icon(
+getCategoryIcon(category),
+color: getCategoryColor(category),
+),
+),
+title: Text(
+(item['title'] ?? category).toString(),
+style: const TextStyle(
+fontSize: 14,
+fontWeight: FontWeight.w600,
+color: darkColor,
+),
+),
+subtitle: Text(
+displayDate,
+style: const TextStyle(fontSize: 11),
+),
+trailing: Row(
+mainAxisSize: MainAxisSize.min,
+children: [
+Text(
+'${isIncome ? '+' : '-'}'
+'${formatMoney(amount.abs())}',
+style: TextStyle(
+color: isIncome
+? const Color(0xFF2EAA66)
+: const Color(0xFFE76565),
+fontSize: 12,
+fontWeight: FontWeight.bold,
+),
+),
+const Icon(
+Icons.chevron_right,
+size: 18,
+color: Colors.grey,
+),
+],
+),
+onTap: () => showEditTransaction(item),
+),
+);
+}),
+],
 ],
 );
 }
-
   Widget buildProfileTab() {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const CircleAvatar(
-          radius: 42,
-          backgroundColor: Color(0xFFE6E8FF),
-          child: Icon(
-            Icons.person,
-            size: 48,
-            color: primaryColor,
+        const Text(
+          'Cá nhân',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: darkColor,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Center(
+          child: CircleAvatar(
+            radius: 40,
+            backgroundColor: Color(0xFFEDEEFF),
+            child: Icon(
+              Icons.person,
+              size: 45,
+              color: primaryColor,
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -1075,55 +1321,28 @@ const SizedBox(height: 70),
           child: Text(
             'Người dùng',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: darkColor,
             ),
           ),
         ),
-        const SizedBox(height: 28),
-        ListTile(
-          leading: const Icon(Icons.person_outline),
-          title: const Text('Thông tin cá nhân'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Chức năng đang được phát triển.'),
-              ),
-            );
-          },
+        const SizedBox(height: 24),
+        const ListTile(
+          leading: Icon(Icons.account_circle_outlined),
+          title: Text('Thông tin cá nhân'),
+          subtitle: Text('Quản lý thông tin tài khoản'),
         ),
-        ListTile(
-          leading: const Icon(Icons.settings_outlined),
-          title: const Text('Cài đặt'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Chức năng đang được phát triển.'),
-              ),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.info_outline),
-          title: const Text('Về ứng dụng'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            showAboutDialog(
-              context: context,
-              applicationName: 'Expense Manager',
-              applicationVersion: '1.0.0',
-              applicationLegalese:
-              'Ứng dụng quản lý chi tiêu cá nhân.',
-            );
-          },
+        const ListTile(
+          leading: Icon(Icons.settings_outlined),
+          title: Text('Cài đặt'),
+          subtitle: Text('Tùy chỉnh ứng dụng'),
         ),
       ],
     );
   }
 }
+
 class ExpenseDonutChart extends StatelessWidget {
   final Map<String, int> data;
   final int total;
