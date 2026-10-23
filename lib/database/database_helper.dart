@@ -20,13 +20,16 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, fileName);
 
-    return await openDatabase(
+    return openDatabase(
       path,
       version: 1,
       onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // Thêm các bước nâng cấp database tại đây
+        // khi cấu trúc bảng thay đổi ở phiên bản sau.
+      },
     );
   }
-
   Future<void> _createDB(Database db, int version) async {
     await db.execute('''
       CREATE TABLE transactions (
